@@ -2,28 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>ZWILT Bot Control Panel</title>
-  <link href="../styles/tailwind.output.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZWILT Bot Manager</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f9fafb;
+      padding: 1rem;
+      min-width: 500px;
+    }
+    h1, h2 {
+      color: #1f2937;
+    }
+    .network-section {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .bot-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .bot-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      background-color: #4f46e5;
+      color: white;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .bot-btn:hover {
+      background-color: #4338ca;
+    }
+    #global-status-display {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      display: none;
+    }
+    .global-status-default { background-color: #f3f4f6; color: #374151; }
+    .global-status-success { background-color: #d1fae5; color: #065f46; }
+    .global-status-error { background-color: #fee2e2; color: #991b1b; }
+  </style>
 </head>
-<body class="bg-gray-50 p-4 font-sans">
-  <header class="mb-4">
-    <h1 class="text-xl font-bold text-blue-700">ZWILT Bot</h1>
-    <p id="statusDisplay" class="mt-2 text-sm text-gray-600">Ready to run bot.</p>
-  </header>
-
-  <section class="grid grid-cols-2 gap-3">
-    <button id="startFollowBot" class="btn">Follow</button>
-    <button id="startLikeBot" class="btn">Like</button>
-    <button id="startCommentBot" class="btn">Comment</button>
-    <button id="startUnlikeBot" class="btn">Unlike</button>
-    <button id="startStoryBot" class="btn">Story</button>
-    <button id="stopAllBots" class="btn btn-danger">Stop All</button>
-  </section>
-
-  <footer class="mt-6 text-xs text-gray-400 text-center">
-    © 2025 ZWILT Automation
-  </footer>
-
-  <script src="popup.js" type="module"></script>
+<body>
+  <h1>ZWILT Bot Manager</h1>
+  <div id="global-status-display" class="global-status-default">Initializing...</div>
+  <div id="networks-container"></div>
+  <script src="popup.js"></script>
 </body>
 </html>

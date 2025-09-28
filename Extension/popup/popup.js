@@ -1,63 +1,100 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const statusDisplay = document.getElementById('statusDisplay');
+  const statusDisplay = document.getElementById('global-status-display');
+
+  const networks = [
+    "Facebook", "Instagram", "Pinterest", "Twitter", "TikTok", "Tinder", "LinkedIn"
+  ];
+
+  const bots = [
+    { label: "Comment", command: "comment" },
+    { label: "Like", command: "like" },
+    { label: "Unlike", command: "unlike" },
+    { label: "Follow", command: "follow" },
+    { label: "Story", command: "story" }
+  ];
 
   function updateStatus(message, type = 'default') {
     const classes = {
-      default: 'bg-gray-100 text-gray-700',
-      success: 'bg-green-100 text-green-700',
-      error: 'bg-red-100 text-red-700'
+      default: 'global-status-default',
+      success: 'global-status-success',
+      error: 'global-status-error'
     };
-    statusDisplay.className = `mb-4 p-3 text-sm font-medium rounded-lg shadow-inner ${classes[type]} transition duration-300`;
+    statusDisplay.className = classes[type];
     statusDisplay.textContent = message;
+    statusDisplay.style.display = 'block';
   }
 
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const activeTab = tabs[0];
+  function injectUI() {
+    const container = document.getElementById('networks-container');
+    networks.forEach(network => {
+      const section = document.createElement('div');
+      section.className = 'network-section';
+      section.innerHTML = `<h2>${network}</h2><div class="bot-buttons" id="${network}-buttons"></div>`;
+      container.appendChild(section);
 
-    if (!activeTab || activeTab.url.startsWith('chrome://')) {
-      updateStatus("Extension cannot run on this page. Navigate to the target website.", 'error');
-      return;
-    }
+      const buttonGroup = section.querySelector('.bot-buttons');
+      bots.forEach(bot => {
+        const btn = document.createElement('button');
+        btn.className = 'bot-btn';
+        btn.textContent = `${bot.label}Bot`;
+        btn.dataset.network = network;
+        btn.dataset.command = bot.command;
+        buttonGroup.appendChild(btn);
+      });
+    });
+  }
 
-    function handleBotAction(botName, action) {
-      updateStatus(`Preparing to run ${botName}...`);
+  function handleBotAction(network, command) {
+    updateStatus(`Preparing ${command} on ${network}...`);
 
-      // Dynamically inject the content script before messaging
+    const controllerPath = `src/content/${network.toLowerCase()}Controller.js`;
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs[0];
+      if (!activeTab || activeTab.url.startsWith('chrome://')) {
+        updateStatus("Extension cannot run on this page.", 'error');
+        return;
+      }
+
       chrome.scripting.executeScript({
         target: { tabId: activeTab.id },
-        files: [`src/content/${botName.replace('Bot', '').toLowerCase()}Controller.js`]
+        files: [controllerPath]
       }, () => {
+        if (chrome.runtime.lastError) {
+          updateStatus("Failed to inject controller.", 'error');
+          console.error("Injection Error:", chrome.runtime.lastError.message);
+          return;
+        }
+
         chrome.tabs.sendMessage(activeTab.id, {
-          action: action,
-          bot: botName
+          command: command,
+          bot: `${network}Bot`
         }, (response) => {
           if (chrome.runtime.lastError) {
-            updateStatus("Content script not running. Check manifest permissions.", 'error');
-            console.error("Content Script Error:", chrome.runtime.lastError.message);
+            updateStatus("Content script not responding.", 'error');
+            console.error("Messaging Error:", chrome.runtime.lastError.message);
             return;
           }
 
           if (response?.status === "SUCCESS") {
-            updateStatus(`${botName} started successfully!`, 'success');
-          } else if (response?.status === "STOPPED") {
-            updateStatus(`All bots stopped.`, 'default');
-          } else if (response?.message) {
-            updateStatus(`Error: ${response.message}`, 'error');
+            updateStatus(`${command} executed on ${network}!`, 'success');
           } else {
-            updateStatus(`Command sent, but response was inconclusive.`, 'default');
+            updateStatus(`Error: ${response?.reason || "Unknown failure"}`, 'error');
           }
         });
       });
+    });
+  }
+
+  injectUI();
+
+  document.getElementById('networks-container').addEventListener('click', (e) => {
+    if (e.target.classList.contains('bot-btn')) {
+      const network = e.target.dataset.network;
+      const command = e.target.dataset.command;
+      handleBotAction(network, command);
     }
-
-    // Attach listeners
-    document.getElementById('startFollowBot')?.addEventListener('click', () => handleBotAction('FollowBot', 'START_TASK'));
-    document.getElementById('startLikeBot')?.addEventListener('click', () => handleBotAction('LikeBot', 'START_TASK'));
-    document.getElementById('startCommentBot')?.addEventListener('click', () => handleBotAction('CommentBot', 'START_TASK'));
-    document.getElementById('startUnlikeBot')?.addEventListener('click', () => handleBotAction('UnlikeBot', 'START_TASK'));
-    document.getElementById('startStoryBot')?.addEventListener('click', () => handleBotAction('StoryBot', 'START_TASK'));
-    document.getElementById('stopAllBots')?.addEventListener('click', () => handleBotAction('AllBots', 'STOP_TASK'));
-
-    updateStatus("Ready to run bot.", 'default');
   });
+
+  updateStatus("Ready to run bots.", 'default');
 });
