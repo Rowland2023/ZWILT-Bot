@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZWILT Bot Control Panel</title>
+  <link href="../styles/tailwind.output.css" rel="stylesheet" />
+</head>
+<body class="bg-gray-50 p-4 font-sans">
+  <header class="mb-4">
+    <h1 class="text-xl font-bold text-blue-700">ZWILT Bot</h1>
+    <p id="statusDisplay" class="mt-2 text-sm text-gray-600">Ready to run bot.</p>
+  </header>
+
+  <section class="grid grid-cols-2 gap-3">
+    <button id="startFollowBot" class="btn">Follow</button>
+    <button id="startLikeBot" class="btn">Like</button>
+    <button id="startCommentBot" class="btn">Comment</button>
+    <button id="startUnlikeBot" class="btn">Unlike</button>
+    <button id="startStoryBot" class="btn">Story</button>
+    <button id="stopAllBots" class="btn btn-danger">Stop All</button>
+  </section>
+
+  <footer class="mt-6 text-xs text-gray-400 text-center">
+    © 2025 ZWILT Automation
+  </footer>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

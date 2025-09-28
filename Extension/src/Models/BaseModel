@@ -1,0 +1,47 @@
+// Extension/src/models/BaseModel.js
+
+export default class BaseModel {
+  constructor({ platform = "generic", taskName = "UnnamedBot", maxTasks = 10 }) {
+    this.platform = platform;
+    this.taskName = taskName;
+    this.maxTasks = maxTasks;
+    this.progress = 0;
+    this.history = [];
+    this.startedAt = null;
+    this.completedAt = null;
+  }
+
+  start() {
+    this.startedAt = new Date();
+    this.progress = 0;
+    this.history = [];
+  }
+
+  completeTask(detail = {}) {
+    this.progress++;
+    this.history.push({
+      timestamp: new Date(),
+      detail
+    });
+
+    if (this.progress >= this.maxTasks) {
+      this.completedAt = new Date();
+    }
+  }
+
+  isComplete() {
+    return this.progress >= this.maxTasks;
+  }
+
+  getStatus() {
+    return {
+      taskName: this.taskName,
+      platform: this.platform,
+      progress: this.progress,
+      maxTasks: this.maxTasks,
+      startedAt: this.startedAt,
+      completedAt: this.completedAt,
+      isComplete: this.isComplete()
+    };
+  }
+}
