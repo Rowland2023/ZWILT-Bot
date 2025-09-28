@@ -1,17 +1,19 @@
 // Extension/background/UnlikeBot.js
 
 import BotService from './BotService.js';
-import InstagramController from '../src/controllers/InstagramController.js'; // or FacebookController, etc.
+import InstagramController from '../src/controllers/InstagramController.js'; // Swap based on platform
 
 export default class UnlikeBot extends BotService {
   constructor(settings) {
     super(settings);
-    this.controller = new InstagramController(); // Swap based on platform
+    this.controller = new InstagramController(); // Consider dynamic controller mapping
+    this.tabId = settings.tabId; // ✅ Ensure tabId is passed in settings
   }
 
-  execute() {
+  async execute() {
     try {
-      this.controller.unlikeNextPost();
+      const result = await this.controller.unlikeNextPost(this.tabId);
+      console.log(`${this.constructor.name} unliked post:`, result);
     } catch (error) {
       console.error(`${this.constructor.name} failed to unlike post:`, error);
     }

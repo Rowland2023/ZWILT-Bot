@@ -33,77 +33,22 @@
     "*://m.instagram.com/*",
     "*://*.twitter.com/*",
     "*://mobile.twitter.com/*",
+    "*://x.com/*",
     "*://*.linkedin.com/*",
     "*://*.tiktok.com/*",
     "*://*.pinterest.com/*",
     "*://*.tinder.com/*"
   ],
-  "content_scripts": [
-    {
-      "matches": [
-        "*://*.facebook.com/*",
-        "*://web.facebook.com/*",
-        "*://m.facebook.com/*"
-      ],
-      "js": ["src/content/facebookController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.instagram.com/*",
-        "*://m.instagram.com/*"
-      ],
-      "js": ["src/content/instagramController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.twitter.com/*",
-        "*://mobile.twitter.com/*"
-      ],
-      "js": ["src/content/twitterController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.linkedin.com/*",
-        "*://www.linkedin.com/*"
-      ],
-      "js": ["src/content/linkedinController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.tiktok.com/*",
-        "*://www.tiktok.com/*"
-      ],
-      "js": ["src/content/tiktokController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.pinterest.com/*",
-        "*://www.pinterest.com/*"
-      ],
-      "js": ["src/content/pinterestController.js"],
-      "type": "module"
-    },
-    {
-      "matches": [
-        "*://*.tinder.com/*",
-        "*://www.tinder.com/*"
-      ],
-      "js": ["src/content/tinderController.js"],
-      "type": "module"
-    }
-  ],
   "web_accessible_resources": [
-    {
-      "resources": [
-        "assets/*",
-        "popup/*"
-      ],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  {
+    "resources": [
+      "assets/*",
+      "popup/*",
+      "src/content/*.js",
+      "content/*.js"
+    ],
+    "matches": ["<all_urls>"]
+  }
+]
+
 }

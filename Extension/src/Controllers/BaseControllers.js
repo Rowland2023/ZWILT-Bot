@@ -1,38 +1,23 @@
+import FacebookBot from './Bots/FacebookBot.js';
+// Add other bots like InstagramBot, TwitterBot, etc.
+
 export default class BaseController {
-  constructor(platform) {
-    this.platform = platform;
-    this.scriptMap = {
-      facebook: "src/content/facebookController.js",
-      instagram: "src/content/instagramController.js",
-      twitter: "src/content/twitterController.js"
+  static handle(message, sender, sendResponse) {
+    const botMap = {
+      FacebookBot: FacebookBot,
+      // InstagramBot: InstagramBot,
+      // TwitterBot: TwitterBot,
+      // etc.
     };
-  }
 
-  /**
-   * Injects the content script for the current platform.
-   */
-  async injectContentScript(tabId) {
-    const scriptPath = this.scriptMap[this.platform];
-    if (!scriptPath) throw new Error(`No script found for platform: ${this.platform}`);
+    const BotClass = botMap[message.bot];
+    if (!BotClass) {
+      console.warn("ZWILT Bot: Unknown bot", message.bot);
+      sendResponse({ status: "FAILED", reason: "Unknown bot" });
+      return;
+    }
 
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: [scriptPath]
-    });
-  }
-
-  /**
-   * Sends a command to the content script running in the tab.
-   */
-  async sendCommand(tabId, command, payload = {}) {
-    return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabId, { command, ...payload }, response => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve(response);
-        }
-      });
-    });
+    const botInstance = new BotClass();
+    botInstance.run(message, sender, sendResponse);
   }
 }

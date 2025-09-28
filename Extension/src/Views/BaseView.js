@@ -1,5 +1,3 @@
-// Extension/src/views/BaseView.js
-
 export default class BaseView {
   constructor(rootSelector) {
     this.root = document.querySelector(rootSelector);
@@ -12,7 +10,7 @@ export default class BaseView {
    * Clears the view content.
    */
   clear() {
-    this.root.innerHTML = "";
+    this.root.textContent = ""; // faster than innerHTML for clearing
   }
 
   /**
@@ -20,7 +18,8 @@ export default class BaseView {
    * @param {string} html
    */
   render(html) {
-    this.root.innerHTML = html;
+    this.clear();
+    this.root.insertAdjacentHTML("afterbegin", html);
   }
 
   /**
@@ -38,9 +37,20 @@ export default class BaseView {
    */
   bindClick(selector, handler) {
     const element = this.root.querySelector(selector);
-    if (element) {
-      element.addEventListener("click", handler);
-    }
+    element?.addEventListener("click", handler);
+  }
+
+  /**
+   * Binds delegated click events for dynamic elements.
+   * @param {string} selector
+   * @param {Function} handler
+   */
+  bindDelegatedClick(selector, handler) {
+    this.root.addEventListener("click", event => {
+      if (event.target.matches(selector)) {
+        handler(event);
+      }
+    });
   }
 
   /**
@@ -49,12 +59,46 @@ export default class BaseView {
    * @param {string} type - success, error, info
    */
   showStatus(message, type = "info") {
-    const color = {
-      success: "green",
-      error: "red",
-      info: "blue"
-    }[type] || "black";
+    const colors = {
+      success: "#28a745",
+      error: "#dc3545",
+      info: "#007bff"
+    };
+    this.append(`<p style="color:${colors[type] || "#333"};">${message}</p>`);
+  }
 
-    this.append(`<p style="color:${color};">${message}</p>`);
+  /**
+   * Shows a loading spinner.
+   * @param {string} message
+   */
+  showLoading(message = "Loading...") {
+    this.append(`<div class="loading"><span>${message}</span></div>`);
+  }
+
+  /**
+   * Hides the loading spinner.
+   */
+  hideLoading() {
+    const loader = this.root.querySelector(".loading");
+    loader?.remove();
+  }
+
+  /**
+   * Binds input change events.
+   * @param {string} selector
+   * @param {Function} handler
+   */
+  bindInput(selector, handler) {
+    const input = this.root.querySelector(selector);
+    input?.addEventListener("input", event => handler(event.target.value));
+  }
+
+  /**
+   * Displays an error message.
+   * @param {Error|string} error
+   */
+  showError(error) {
+    const message = typeof error === "string" ? error : error.message;
+    this.showStatus(message, "error");
   }
 }
