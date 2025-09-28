@@ -1,5 +1,3 @@
-// Extension/src/controllers/TikTokController.js
-
 import BaseController from './BaseController.js';
 
 export default class TikTokController extends BaseController {
@@ -7,23 +5,18 @@ export default class TikTokController extends BaseController {
     super("tiktok");
   }
 
-  async likeNextVideo(tabId) {
+  async likeNextPost(tabId) {
     await this.injectContentScript(tabId);
     return this.sendCommand(tabId, "like");
   }
 
-  async followNextCreator(tabId) {
+  async followNextUser(tabId) {
     await this.injectContentScript(tabId);
     return this.sendCommand(tabId, "follow");
   }
 
-  async commentOnNextVideo(tabId, text) {
+  async commentOnNextPost(tabId, text) {
     await this.injectContentScript(tabId);
     return this.sendCommand(tabId, "comment", { text });
-  }
-
-  async viewNextVideo(tabId) {
-    await this.injectContentScript(tabId);
-    return this.sendCommand(tabId, "viewVideo");
   }
 }
