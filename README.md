@@ -1,36 +1,75 @@
-# Punch-MERN-Test
+🧠 ZWILT Bot — Social Media Automation Extension
+ZWILT Bot is a modular Chrome extension that automates social media interactions across platforms like Facebook, Instagram, Twitter, TikTok, and more. Whether you're growing a brand, managing multiple accounts, or just saving time, ZWILT Bot gives you powerful control with a clean UI and dynamic bot architecture.
 
+🚀 Features
+✅ Multi-platform support: Facebook, Instagram, Twitter, TikTok, Pinterest, LinkedIn, Tinder
 
+✅ Modular bot system: Easily add or remove bots per platform
 
-Installing the application
+✅ Dynamic content script injection: No reloads required
 
-1. Open google chrome on your desktop
-2. Go to extensions (More Tools -> Extentions)
-3. Enable developer mode (top right of the page)
-4. Select load unpacked (top left of the page)
-5. Move to the extentions folder in the downloaded git repo
-6. Select (the application should work now! 🥳)
+✅ Tailwind-powered popup UI: Clean, responsive, and intuitive
 
-Test Guideline
+✅ Live status feedback: Know exactly what each bot is doing
 
-This will be the second part of your test at Punch before we get you started on a particular project; this is to analyse your skill levels and problem solving skills. Your future at Punch will be dependant on the outcome of this test, so make sure to give it your all!
+✅ Supports actions: Follow, Like, Comment, Story View, Unlike
 
-The codebase you will all be working on is a chrome extension, primary goal of the system is go grow your social media accounts in a similar fashion as a human; in order to avoid getting caught or raising any flags.
+📁 Project Structure
+Code
+ZWILT-Bot/
+├── assets/                 # Icons and images
+├── background/            # Service worker logic
+├── popup/                 # HTML/CSS/JS for extension popup
+├── src/
+│   ├── BaseController.js  # Shared bot logic
+│   ├── FacebookController.js
+│   ├── TikTokController.js
+│   └── ...                # Other platform controllers
+├── manifest.json          # Chrome extension config
+└── README.md              # You're reading it!
+🧩 How It Works
+Each bot is a controller class (e.g. FacebookController) that inherits from BaseController. When a user clicks a button in the popup, the extension:
 
-Your aim is to:
-* 		Implement MVC architecture (Re-architect)
-* 		Introduce class base structure (Master class and sub class structure (Inheritance))
-* 		DRY Principle (Don't repeat yourself)
-* 		Refactor the codebase  (Improving legacy functions & removing code redundancy)
+Detects the active tab and platform
 
-You will have 5 working days to highlight the direction and progress.
+Dynamically injects the correct content script
 
-Daily sync up calls are already scheduled in your calendars; each individual will join in daily to share their progress on the call on what was accomplished in the last 24 hours and what the next direction is. This call will primarily be used for catchup and feedback purposes.
+Sends a command (e.g. like, follow, comment)
 
-For application installation, a read me file is included on Github.
+Receives a response and updates the UI
 
-The repo access has been shared; you all have a branch allocated to you by your name in which you should be working on; please make sure not to commit in the main/master.
+🛠️ Installation
+Clone the repo git clone https://github.com/Rowland2023/ZWILT-Bot.git
 
-NOTE: 
-THIS IS AN INDIVIDUAL TASK; COLLABORATIONS CAN LEAD TO DISQUALIFICATION.
-YOU SHOULD ALL LOG YOUR HOURS IN HUBSTAFF CORRECTLY, THATS TAKEN IN RESPECT WHILE CONCLUDING THE TEST RESULTS
+Navigate to the extension folder cd ZWILT-Bot/Extension
+
+Load into Chrome:
+
+Go to chrome://extensions
+
+Enable Developer Mode
+
+Click Load unpacked
+
+Select the Extension folder
+
+🧪 Demo Tips
+Open a supported site (e.g. web.facebook.com)
+
+Open DevTools → Console
+
+Click a bot button in the popup
+
+Watch the bot interact with the page and update the status
+
+📦 Adding a New Bot
+Create a new controller in src/ (e.g. InstagramController.js)
+
+Add match patterns to manifest.json
+
+Update popup.js with bot-to-platform mapping
+
+Add a button in popup.html
+
+📄 License
+MIT License — free to use, modify, and distribute.
