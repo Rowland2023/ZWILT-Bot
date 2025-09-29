@@ -1,190 +1,158 @@
 /**
  * LinkedIn Bot Controller
- * Listens for commands from the extension popup and executes actions on the LinkedIn page.
- * Selectors are designed to target common, stable attributes like aria-label and button text.
+ * Listens for commands from the extension and executes actions on the LinkedIn web platform.
+ * Actions include reacting (liking), commenting, and following/connecting.
  */
 
-// Helper function to find a button (or button-like element) that contains specific text.
-function findButtonByText(text) {
-    const selector = 'button, a[role="button"]';
-    const buttons = document.querySelectorAll(selector);
-    
-    for (const btn of buttons) {
-        // Use innerText for visible, rendered text and normalize it for comparison
-        const btnText = btn.innerText ? btn.innerText.trim() : '';
-        
-        if (btnText.toLowerCase() === text.toLowerCase()) {
-            return btn;
-        }
-    }
-    return null;
-}
-
-// Utility function to simulate user input on contenteditable fields
-// LinkedIn often uses contenteditable DIVs for comment fields.
-function setContentEditableText(element, text) {
-    if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
-        element.value = text;
-    } else {
-        // Assume contenteditable div
-        element.textContent = text;
-    }
-
-    // Manually trigger events so LinkedIn's framework recognizes the change
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    // Attempting keyup 13 (Enter) can sometimes trigger the post button enablement
-    element.dispatchEvent(new Event('keyup', { bubbles: true, keyCode: 13 })); 
-}
-
 (function() {
-    console.log("LinkedIn Controller injected and listener waiting for message...");
+    // Check if the listener is already registered to prevent duplication
+    if (window.hasLinkedInListener) return;
+    window.hasLinkedInListener = true;
+    
+    console.log("LinkedIn Controller injected and listening for messages...");
+
+    /**
+     * Finds the parent article/post element for the current action.
+     * This ensures the action targets the correct post in the feed.
+     * @param {HTMLElement} element A child element (like the Like button).
+     * @returns {HTMLElement|null} The ancestor post element.
+     */
+    function findPostContainer(element) {
+        // Targets the main feed item container for context
+        return element ? element.closest('.feed-shared-update-v2, .scaffold-finite-scroll__content li') : null;
+    }
+
+    /**
+     * Finds the post-specific action button (e.g., Like, Comment) within a post container.
+     * @param {HTMLElement} postContainer The post element.
+     * @param {string} text The text/aria-label to look for (e.g., "Like", "Comment").
+     * @returns {HTMLElement|null} The action button.
+     */
+    function findPostActionButton(postContainer, text) {
+        if (!postContainer) return null;
+        
+        // Search for buttons that contain the given text (case-insensitive)
+        const buttons = postContainer.querySelectorAll('button');
+        for (const btn of buttons) {
+            const label = btn.getAttribute('aria-label') || btn.textContent;
+            if (label && label.toLowerCase().includes(text.toLowerCase())) {
+                return btn;
+            }
+        }
+        return null;
+    }
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
             
-            // Ignore messages not explicitly for LinkedIn
             if (request.network !== 'LinkedIn') {
                 return false; 
             }
 
+            console.log(`[LinkedIn Controller] Received command: ${request.command}`);
+
+            const respond = (status, message, reason) => {
+                console.log(`[LinkedIn Controller] Sending response: ${status} - ${message || reason}`);
+                sendResponse({ status, message, reason });
+            };
+
             try {
-                let element, successMessage;
+                let targetElement = null;
+                let postContainer = null;
+                let successMessage = "";
 
                 switch (request.command) {
                     
-                    case 'comment':
-                        console.log(`Executing COMMENT command with text: ${request.text}`);
-                        
-                        // 1. Find the comment input field
-                        const commentField = document.querySelector('div[contenteditable="true"][aria-label="Add a comment..."]');
-
-                        if (!commentField) {
-                            throw new Error("Comment input field not found.");
-                        }
-
-                        // 2. Insert the text using the specialized function
-                        setContentEditableText(commentField, request.text);
-
-                        // 3. Wait briefly for the "Post" button to become visible/active
-                        setTimeout(() => {
-                            // 4. Find and click the Post/Submit button
-                            // This targets the submit button after text is entered.
-                            const postButton = findButtonByText('Post'); 
-
-                            if (postButton) {
-                                postButton.click();
-                                successMessage = `Comment posted on LinkedIn!`;
-                                sendResponse({ status: "SUCCESS", message: successMessage });
-                            } else {
-                                sendResponse({ status: "ERROR", reason: "Post button not found after typing comment." });
-                            }
-                        }, 500); // 500ms delay for UI update
-
-                        // Returning true is CRITICAL because sendResponse is called asynchronously inside setTimeout
-                        return true; 
-
                     case 'like':
-                        console.log('Executing LIKE command.');
-                        // Targets the button with the label 'Like' (the initial state)
-                        element = document.querySelector("button[aria-label='Like']"); 
-                        // Fallback for newer selectors that wrap the 'Like' action
-                        if (!element) {
-                            element = document.querySelector("button[aria-label*='React to']");
-                        }
-                        successMessage = 'Post liked on LinkedIn.';
-                        break;
-                        
                     case 'unlike':
-                        console.log('Executing UNLIKE command.');
-                        // Targets the button when it is in the liked state, usually indicated by 'Remove Like' or the same generic button now active
-                        element = document.querySelector("button[aria-label='Remove Like']");
-                        if (!element) {
-                            // Fallback for generic button which acts as a toggle if it's currently active (LinkedIn class)
-                            element = document.querySelector("button[aria-label='Like'].artdeco-button--active");
-                        }
-                        successMessage = 'Post unliked on LinkedIn.';
-                        break;
-                        
-                    case 'follow': // Mapped from the common 'Connect' button
-                        console.log('Executing FOLLOW (Connect) command.');
-                        // 1. Try to find the Connect button on a profile
-                        element = findButtonByText('Connect');
-                        if (!element) {
-                            // 2. Try to find the Follow button (e.g., for company pages)
-                            element = findButtonByText('Follow');
-                        }
-                        successMessage = 'Connection or Follow request sent on LinkedIn.';
-                        break;
+                        // 1. Find the most recent 'Like' button visible in the feed.
+                        // We target buttons with aria-label containing "Like" or "React"
+                        targetElement = document.querySelector('button[aria-label*="Like"], button[aria-label*="React"], button[title*="Like"]');
+                        postContainer = findPostContainer(targetElement);
+                        targetElement = findPostActionButton(postContainer, 'Like');
 
-                    case 'unfollow': 
-                        console.log('Executing UNFOLLOW/DISCONNECT command. Attempting robust process.');
+                        if (targetElement) {
+                            targetElement.click();
+                            successMessage = `Reaction/Like executed on the most recent LinkedIn post.`;
+                        } else {
+                            throw new Error("Like/React button not found on the most recent visible post.");
+                        }
+                        break;
                         
-                        // 1. Try simple company page unfollow
-                        let unfollowBtn = findButtonByText('Following');
-                        if (unfollowBtn) {
-                            unfollowBtn.click();
-                            // If a confirmation modal appears, we stop here and rely on user to confirm.
-                            sendResponse({ status: "SUCCESS", message: "Clicked 'Following'. User may need to confirm unfollow." });
-                            return true;
+                    case 'comment':
+                        if (!request.text) {
+                             throw new Error("Cannot send comment: Text is missing.");
+                        }
+
+                        // 1. Find the comment button for the latest post
+                        const commentButton = document.querySelector('button[aria-label*="Comment"], button[title*="Comment"]');
+                        postContainer = findPostContainer(commentButton);
+                        
+                        if (!postContainer) {
+                             throw new Error("Post container for comment not found.");
+                        }
+
+                        // 2. Click the comment button to expand the input field (if not already expanded)
+                        const initialCommentBtn = findPostActionButton(postContainer, 'Comment');
+                        if (initialCommentBtn) {
+                           initialCommentBtn.click();
                         }
                         
-                        // 2. More complex profile disconnect (requires More menu)
-                        let primaryButton = findButtonByText('Message');
-                        
-                        if (primaryButton) {
-                            // Click the 'More' (ellipsis) button next to it
-                            const moreButton = primaryButton.closest('div')?.nextElementSibling?.querySelector('button[aria-label="More actions"]');
-                            
-                            if (moreButton) {
-                                moreButton.click();
-                                // Wait for the dropdown menu to appear
-                                setTimeout(() => {
-                                    // Find the 'Unfollow' or 'Remove Connection' option in the dropdown
-                                    const unfollowOption = findButtonByText('Unfollow') || findButtonByText('Remove connection');
-                                    if (unfollowOption) {
-                                        unfollowOption.click();
-                                        sendResponse({ status: "SUCCESS", message: "Successfully initiated Unfollow/Remove Connection process." });
-                                    } else {
-                                        sendResponse({ status: "ERROR", reason: "More menu opened, but 'Unfollow' or 'Remove connection' option not found." });
-                                    }
-                                }, 500); // Wait for dropdown to render
-                                return true; // Async response
+                        // Wait briefly for the UI to expand the text area
+                        setTimeout(() => {
+                            // 3. Find the actual text input area (contenteditable div for comment)
+                            const commentInput = postContainer.querySelector('[contenteditable="true"], .editor-container .ql-editor');
+                            // 4. Find the Post button
+                            const postButton = findPostActionButton(postContainer, 'Post');
+
+                            if (commentInput && postButton) {
+                                // Set the text and dispatch events to trigger LinkedIn's internal logic
+                                commentInput.textContent = request.text;
+                                commentInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                commentInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                
+                                // Click the post button
+                                postButton.click();
+                                respond("SUCCESS", "Comment posted on LinkedIn.");
+                            } else {
+                                respond("ERROR", null, "Comment input field or Post button not found after clicking comment.");
                             }
-                        }
+                        }, 700); // 700ms delay to wait for UI transition
+                        return true; // Keep connection open for the async response
+
+                    case 'follow':
+                    case 'connect':
+                        // Search for the first 'Follow' or 'Connect' button visible on the page (usually primary actions)
+                        targetElement = document.querySelector('button:is([aria-label*="Follow"], [aria-label*="Connect"])');
                         
-                        throw new Error("Target element for UNFOLLOW/DISCONNECT not found.");
+                        if (targetElement) {
+                            targetElement.click();
+                            successMessage = `Follow/Connect action executed.`;
+                        } else {
+                            throw new Error("Follow or Connect button not found on the page.");
+                        }
+                        break;
 
-
-                    case 'story': // Viewing the first video/story
-                        console.log('Executing STORY/VIDEO command.');
-                        // Targets the story container in the sidebar. This is prone to breaking.
-                        element = document.querySelector('div[data-control-name="view_story"]');
-                        successMessage = 'Story/Video command executed on LinkedIn.';
+                    case 'story':
+                        // Scroll down to view the next post
+                        window.scrollBy(0, window.innerHeight * 0.8); // Scroll 80% of the viewport height
+                        successMessage = "Scrolled down to view the next post/story on LinkedIn.";
                         break;
 
                     default:
-                        sendResponse({ status: "ERROR", reason: `Unknown command: ${request.command}` });
+                        respond("ERROR", null, `Unknown command: ${request.command}`);
                         return true;
                 }
                 
-                // For synchronous commands (like, unlike, follow, story)
-                if (element && element.click) {
-                    element.click();
-                    sendResponse({ status: "SUCCESS", message: successMessage });
-                } else if (!successMessage) {
-                    // This is a safety check for complex commands that might have failed to assign an element
-                    sendResponse({ status: "SUCCESS", message: `Complex command ${request.command} executed on LinkedIn!` });
-                } else {
-                    throw new Error(`Target element for ${request.command} not found.`);
+                // Only for synchronous commands (like, follow, story)
+                if (successMessage) {
+                    respond("SUCCESS", successMessage);
                 }
 
             } catch (error) {
-                // If any part of the execution fails (e.g., selector not found)
-                sendResponse({ status: "ERROR", reason: `Execution failed on LinkedIn: ${error.message}` });
+                respond("ERROR", null, `Execution failed on LinkedIn: ${error.message}`);
             }
 
-            // Always return true to acknowledge that sendResponse might be called asynchronously
             return true;
         }
     );

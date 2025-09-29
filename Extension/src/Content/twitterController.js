@@ -1,7 +1,8 @@
 /**
  * Twitter Bot Controller
  * Listens for commands from the extension and executes actions on the X/Twitter platform.
- * NOTE: The popup sends 'Twitter' as the network name.
+ * FIX: Maps 'unlike' to 'like' data-testid and 'unretweet' to 'retweet' data-testid, 
+ * as Twitter uses a single element for both states.
  */
 
 // Utility function to simulate text input in a content-editable div
@@ -23,45 +24,70 @@ function setReplyBoxText(element, text) {
         function(request, sender, sendResponse) {
             
             // 1. Check intended recipient
-            // We expect the network name 'Twitter' from the popup.js
             if (request.network !== 'Twitter') {
                 return false; 
             }
 
             console.log(`[Twitter Controller] Received command: ${request.command}`);
 
-            // Declare response function outside of try/catch for cleaner use
+            // This function calls sendResponse SYNCHRONOUSLY.
             const respond = (status, message, reason) => {
                 console.log(`[Twitter Controller] Sending response: ${status} - ${message || reason}`);
-                // Ensure sendResponse is always called
                 sendResponse({ status, message, reason });
             };
 
             try {
-                let element;
+                let targetElement;
+                let targetTestId;
 
                 switch (request.command) {
                     
-                    case 'follow':
-                    case 'unfollow':
                     case 'like':
                     case 'unlike':
-                    case 'retweet':
-                    case 'unretweet':
-                        // data-testid attributes are the same for X/Twitter actions
-                        const testId = request.command; 
+                        // Both like and unlike use the same button with this data-testid
+                        targetTestId = 'like'; 
+                        targetElement = document.querySelector(`[data-testid='${targetTestId}']`);
                         
-                        // Find the button using data-testid (case-insensitive selection might be safer)
-                        element = document.querySelector(`div[data-testid='${testId}']`);
-                        
-                        if (element) {
-                            element.click();
-                            respond("SUCCESS", `Post ${request.command}ed on X (Twitter).`);
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `Post ${request.command} action executed on X (Twitter).`);
                         } else {
-                            // Throwing an error ensures the catch block runs with a detailed error
-                            throw new Error(`Target element data-testid='${testId}' not found. Ensure the correct post/profile is visible.`);
+                            throw new Error(`Target element data-testid='${targetTestId}' not found. Ensure the post is visible.`);
                         }
                         break;
+                        
+                    case 'retweet':
+                    case 'unretweet':
+                        // Both retweet and unretweet use the same button with this data-testid
+                        targetTestId = 'retweet'; 
+                        targetElement = document.querySelector(`[data-testid='${targetTestId}']`);
+                        
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `Post ${request.command} action executed on X (Twitter).`);
+                        } else {
+                            throw new Error(`Target element data-testid='${targetTestId}' not found. Ensure the post is visible.`);
+                        }
+                        break;
+
+                    case 'follow':
+                    case 'unfollow':
+                        // This part is confirmed working, using resilient text search on buttons
+                        targetElement = Array.from(document.querySelectorAll('div[role="button"], button'))
+                            .find(el => {
+                                const text = el.textContent?.toLowerCase().trim();
+                                if (!text) return false;
+                                return text.includes('follow') || text.includes('following');
+                            });
+
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `Profile action (${request.command}) executed on X (Twitter).`);
+                        } else {
+                            throw new Error("Follow/Unfollow button not found. You must be on a user's profile page and the button must be visible.");
+                        }
+                        break;
+
 
                     case 'comment':
                         console.log(`Executing COMMENT (Reply) command with text: ${request.text}`);
@@ -70,44 +96,43 @@ function setReplyBoxText(element, text) {
                              throw new Error("Cannot send comment: Reply text is missing.");
                         }
 
-                        // 1. Find the content-editable reply box (aria-label is the target for tweet/reply composition)
-                        const replyBox = document.querySelector("div[aria-label='Tweet text']");
+                        // 1. Find the content-editable reply box using the stable role='textbox'
+                        let replyBox = document.querySelector("[role='textbox']");
                         
                         if (!replyBox) {
-                            throw new Error("Reply input field not found. You must ensure the reply box is open.");
+                            throw new Error("Reply input field not found. You must ensure the reply box is open and focused.");
                         }
 
                         // 2. Set the text and dispatch events
                         setReplyBoxText(replyBox, request.text);
 
-                        // 3. Find and click the submit button (it can be 'replyButton' or the general 'tweetButton')
+                        // 3. Find and click the submit button
+                        // The 'tweetButton' test ID is often used for replies as well
                         const submitButton = document.querySelector("div[data-testid='replyButton'], div[data-testid='tweetButton']");
                         
                         if (submitButton) {
                             submitButton.click();
                             respond("SUCCESS", "Comment (Reply) sent on X (Twitter).");
                         } else {
-                            throw new Error("Reply/Tweet button not found or disabled, even after entering text.");
+                            throw new Error("Reply/Tweet button not found or disabled.");
                         }
                         break;
                         
-                    // NOTE: 'story' command currently not supported on Twitter's web interface
                     case 'story':
                          respond("ERROR", null, `Command 'story' is not applicable to the current Twitter/X web interface.`);
-                         return true;
+                         break;
 
                     default:
                         respond("ERROR", null, `Unknown command: ${request.command}`);
-                        return true; 
+                        break;
                 }
 
             } catch (error) {
-                // This ensures we always send a response back even if execution fails
+                // If any error occurs in the try block, catch it and send an ERROR response.
                 respond("ERROR", null, `Execution failed on Twitter: ${error.message}`);
             }
 
-            // MUST return true to indicate that we will call sendResponse asynchronously (or after the sync block finishes)
-            return true;
+            // Signal synchronous response
         }
     );
 })();

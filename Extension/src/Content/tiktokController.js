@@ -1,118 +1,133 @@
 /**
  * TikTok Bot Controller
- * Listens for commands from the extension and executes actions on the TikTok page.
- * Uses high-quality data-e2e selectors for reliability.
+ * Listens for commands from the extension and executes actions on the TikTok web platform.
+ * Relies primarily on data-e2e attributes for stability.
  */
 
-// Utility function to simulate text input and event dispatching
-function setTextInputValue(element, text) {
-    element.value = text;
-    // Dispatch input and change events to notify the framework of the update
+// Utility function to simulate text input in a content-editable div
+function setCommentBoxText(element, text) {
+    // The TikTok comment box is a content-editable div
+    element.textContent = text;
+    
+    // Dispatch events to notify TikTok's framework of the text update
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 (function() {
+    // Check if the listener is already registered to prevent duplication
+    if (window.hasTikTokListener) return;
+    window.hasTikTokListener = true;
+    
     console.log("TikTok Controller injected and listening for messages...");
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
-
-            // Ensure we only process messages explicitly intended for TikTok
+            
+            // 1. Check intended recipient
             if (request.network !== 'TikTok') {
                 return false; 
             }
 
+            console.log(`[TikTok Controller] Received command: ${request.command}`);
+
+            // This function calls sendResponse SYNCHRONOUSLY.
+            const respond = (status, message, reason) => {
+                console.log(`[TikTok Controller] Sending response: ${status} - ${message || reason}`);
+                sendResponse({ status, message, reason });
+            };
+
             try {
-                let element, successMessage;
+                let targetElement;
 
                 switch (request.command) {
-
+                    
                     case 'like':
-                        console.log('Executing LIKE command.');
-                        // Selector for the Like button using the data-e2e attribute
-                        element = document.querySelector("button[data-e2e='like-button']");
-                        successMessage = 'Post liked on TikTok.';
-                        break;
-
-                    case 'follow':
-                        console.log('Executing FOLLOW command.');
-                        // Selector for the Follow button using the data-e2e attribute
-                        element = document.querySelector("button[data-e2e='follow-button']");
-                        successMessage = 'Profile followed on TikTok.';
-                        break;
-
-                    case 'viewVideo':
-                        console.log('Executing VIEW VIDEO (play) command.');
-                        // Selects the main video element and calls play()
-                        const videoElement = document.querySelector("video");
-                        if (videoElement) {
-                            videoElement.play();
-                            sendResponse({ status: "SUCCESS", message: "Video playback started on TikTok." });
+                    case 'unlike':
+                        // Targets the button wrapping the like icon (which has data-e2e="like-icon")
+                        // TikTok uses the same button to toggle like/unlike
+                        targetElement = document.querySelector('[data-e2e="video-player-actions"] button:nth-child(1)'); // The first button in the actions group is usually 'Like'
+                        
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `${request.command} action executed on TikTok.`);
                         } else {
-                            throw new Error("Video element not found or not ready.");
+                            throw new Error(`Like/Unlike button not found. Ensure the video is visible and loaded.`);
                         }
-                        // Return true to indicate asynchronous response
-                        return true;
+                        break;
+                        
+                    case 'follow':
+                    case 'unfollow':
+                        // Targets the main "Follow" button next to the profile information above the video
+                        targetElement = document.querySelector('[data-e2e="follow-button-2"]'); 
+                        
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `Profile action (${request.command}) executed on TikTok.`);
+                        } else {
+                            // Fallback: search for a follow button on the user's profile page
+                            targetElement = Array.from(document.querySelectorAll('button'))
+                                .find(el => el.textContent?.toLowerCase().trim() === 'follow' || el.textContent?.toLowerCase().trim() === 'following');
+
+                            if (targetElement) {
+                                 targetElement.click();
+                                 respond("SUCCESS", `Profile action (${request.command}) executed on TikTok (using text fallback).`);
+                            } else {
+                                throw new Error("Follow/Unfollow button not found. Must be on a user's profile or the video player.");
+                            }
+                        }
+                        break;
+
 
                     case 'comment':
                         console.log(`Executing COMMENT command with text: ${request.text}`);
                         
-                        // 1. Find the comment textarea
-                        // TikTok typically uses a standard textarea or an input field within the comment section
-                        const commentBox = document.querySelector("textarea"); 
+                        if (!request.text) {
+                             throw new Error("Cannot send comment: Text is missing.");
+                        }
+
+                        // 1. Find the comment input field (contenteditable div)
+                        // It is usually the one with the placeholder "Add comment..."
+                        let commentInput = document.querySelector('[contenteditable="true"][aria-label*="Add comment"], [contenteditable="true"][placeholder*="Add comment"]');
                         
-                        if (!commentBox) {
-                            throw new Error("Comment input field not found.");
+                        if (!commentInput) {
+                            throw new Error("Comment input field not found. Ensure the comment box is open.");
                         }
 
                         // 2. Set the text and dispatch events
-                        setTextInputValue(commentBox, request.text);
-
-                        // 3. Find and click the submit button
-                        // Using the user's generic submit button selector for simplicity, 
-                        // but a data-e2e selector might be safer (e.g., [data-e2e='comment-post-button'])
-                        const submitButton = document.querySelector("button[type='submit']:not([disabled])");
+                        setCommentBoxText(commentInput, request.text);
+                        
+                        // 3. Find the submit button using data-e2e attribute
+                        const submitButton = document.querySelector('[data-e2e="comment-post-button"]');
                         
                         if (submitButton) {
                             submitButton.click();
-                            sendResponse({ status: "SUCCESS", message: "Comment posted on TikTok." });
+                            respond("SUCCESS", "Comment posted on TikTok.");
                         } else {
-                            throw new Error("Comment submit button not found or disabled.");
+                            throw new Error("Post button not found or is disabled. Ensure text has been added to the field.");
                         }
-                        return true;
-                        
-                    case 'unlike':
-                    case 'unfollow':
-                        // TODO: Implement UNLIKE and UNFOLLOW logic here.
-                        successMessage = `${request.command} command executed on TikTok (Action pending implementation).`;
                         break;
+                        
+                    case 'story':
+                         // TikTok web UI scrolls to the next video using the down arrow button.
+                         targetElement = document.querySelector('[data-e2e="arrow-down"]'); 
+                         if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", "Advanced to the next video (Story/Next) on TikTok.");
+                         } else {
+                            respond("ERROR", null, `Command 'story' failed. Next video button not found. You need to be viewing a video.`);
+                         }
+                         break;
 
                     default:
-                        sendResponse({ status: "ERROR", reason: `Unknown command: ${request.command}` });
-                        return true;
-                }
-
-                // Handler for simple click actions (like and follow)
-                if (element && element.click) {
-                    element.click();
-                    sendResponse({ status: "SUCCESS", message: successMessage });
-                } else if (!successMessage) {
-                     // Fallback for complex commands that don't need a simple click right now
-                     sendResponse({ status: "SUCCESS", message: `Complex command ${request.command} executed on TikTok!` });
-                } else {
-                    // Element not found for simple click action
-                    throw new Error(`Target element for ${request.command} not found. Selector might be wrong.`);
+                        respond("ERROR", null, `Unknown command: ${request.command}`);
+                        break;
                 }
 
             } catch (error) {
-                // Catches errors from any synchronous or improperly executed step
-                sendResponse({ status: "ERROR", reason: `Execution failed on TikTok: ${error.message}` });
+                // If any error occurs in the try block, catch it and send an ERROR response.
+                respond("ERROR", null, `Execution failed on TikTok: ${error.message}`);
             }
-
-            // Must return true for all message handlers where sendResponse is called, 
-            // even synchronously, to ensure the port stays open.
-            return true;
         }
     );
 })();

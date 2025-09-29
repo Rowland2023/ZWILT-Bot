@@ -1,78 +1,68 @@
 /**
  * Tinder Bot Controller
- * Listens for commands from the extension and executes dating actions on the Tinder page.
- * Relies on aria-label selectors, which are highly reliable on this platform.
+ * Listens for commands from the extension and executes actions on the Tinder web platform.
+ * Relies on the 'title' and 'aria-label' attributes of the main action buttons.
  */
 
 (function() {
+    // Check if the listener is already registered to prevent duplication
+    if (window.hasTinderListener) return;
+    window.hasTinderListener = true;
+    
     console.log("Tinder Controller injected and listening for messages...");
+
+    // Helper map for command to button title mapping
+    const actionMap = {
+        'like': 'Like',        // Swipes right (Green heart)
+        'nope': 'Nope',        // Swipes left (Red X)
+        'superLike': 'Super Like' // Swipes up (Blue star)
+    };
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
-
-            // Ensure we only process messages explicitly intended for Tinder
+            
+            // 1. Check intended recipient
             if (request.network !== 'Tinder') {
                 return false; 
             }
 
+            console.log(`[Tinder Controller] Received command: ${request.command}`);
+
+            // This function calls sendResponse SYNCHRONOUSLY.
+            const respond = (status, message, reason) => {
+                console.log(`[Tinder Controller] Sending response: ${status} - ${message || reason}`);
+                sendResponse({ status, message, reason });
+            };
+
+            const targetActionTitle = actionMap[request.command];
+
+            if (!targetActionTitle) {
+                respond("ERROR", null, `Unknown command: ${request.command}. Supported commands are like, nope, and superLike.`);
+                return true;
+            }
+
             try {
-                let element, successMessage;
-
-                switch (request.command) {
-                    
-                    case 'swipeRight':
-                    case 'like':
-                        console.log('Executing SWIPE RIGHT (Like) command.');
-                        // Selector for the Like button using the aria-label
-                        element = document.querySelector("button[aria-label='Like']");
-                        successMessage = 'Swiped right (liked) on Tinder.';
-                        break;
-
-                    case 'superLike':
-                        console.log('Executing SUPER LIKE command.');
-                        // Selector for the Super Like button using the aria-label
-                        element = document.querySelector("button[aria-label='Super Like']");
-                        successMessage = 'Super Liked on Tinder.';
-                        break;
-
-                    case 'swipeLeft':
-                    case 'pass':
-                        console.log('Executing SWIPE LEFT (Nope) command.');
-                        // Selector for the Nope button (the pass action)
-                        element = document.querySelector("button[aria-label='Nope']");
-                        successMessage = 'Swiped left (passed) on Tinder.';
-                        break;
-                        
-                    case 'comment':
-                    case 'sendMessage':
-                        // TODO: Implement logic for sending a message/chat if a match is open.
-                        successMessage = `Message command executed on Tinder (Action pending implementation).`;
-                        break;
-
-                    default:
-                        sendResponse({ status: "ERROR", reason: `Unknown command: ${request.command}` });
-                        return true;
+                // 1. Try finding the button based on the 'title' attribute (common in Tinder UI)
+                let targetElement = document.querySelector(`button[title="${targetActionTitle}"]`);
+                
+                if (!targetElement) {
+                    // 2. Fallback: Try finding the button using 'aria-label'
+                    targetElement = document.querySelector(`button[aria-label="${targetActionTitle}"]`);
                 }
-
-                // Handler for simple click actions (swipe, like, etc.)
-                if (element && element.click) {
-                    element.click();
-                    sendResponse({ status: "SUCCESS", message: successMessage });
-                } else if (!successMessage) {
-                     // Fallback for complex commands that don't need a simple click right now
-                     sendResponse({ status: "SUCCESS", message: `Complex command ${request.command} executed on Tinder!` });
+                
+                if (targetElement) {
+                    targetElement.click();
+                    respond("SUCCESS", `${request.command} action executed on Tinder.`);
                 } else {
-                    // Element not found for simple click action
-                    throw new Error(`Target element for ${request.command} not found. Make sure you are on the discovery screen.`);
+                    throw new Error(`Button for '${request.command}' not found. Ensure you are on the main swiping screen.`);
                 }
 
             } catch (error) {
-                // Catches errors from any synchronous step
-                sendResponse({ status: "ERROR", reason: `Execution failed on Tinder: ${error.message}` });
+                // If any error occurs in the try block, catch it and send an ERROR response.
+                respond("ERROR", null, `Execution failed on Tinder: ${error.message}`);
             }
 
-            // Must return true for all message handlers
-            return true;
+            return true; // Keep true for compatibility with async messaging pattern
         }
     );
 })();

@@ -1,141 +1,142 @@
 /**
  * Instagram Bot Controller
- * Listens for commands from the extension and executes actions on the Instagram page.
- * Uses native DOM methods, including a helper function to reliably find buttons by text content.
+ * Listens for commands from the extension and executes actions on the Instagram web platform.
+ * Relies heavily on aria-labels and text content due to dynamic class names.
  */
 
-// Helper function to find a button (or button-like element) that contains specific text.
-function findButtonByText(text) {
-    const selector = 'button, a[role="button"]'; // Select standard buttons and anchor tags acting as buttons
-    const buttons = document.querySelectorAll(selector);
-    
-    for (const btn of buttons) {
-        // Use innerText for visible, rendered text and normalize it for comparison
-        const btnText = btn.innerText.trim();
-        
-        // Case-insensitive exact match or close match is often best
-        if (btnText.toLowerCase() === text.toLowerCase()) {
-            return btn;
-        }
-        
-        // For 'Following', it might be in a different element, but 'Follow' is usually simple text
+// Utility function to simulate text input in a textarea
+function setCommentBoxText(element, text) {
+    if (element.tagName === 'TEXTAREA') {
+        element.value = text;
+    } else {
+        // Fallback for content-editable div (sometimes used in replies)
+        element.textContent = text;
     }
-    return null;
-}
-
-// Helper function to simulate typing into a content-editable element (like a comment box)
-function simulateTextEntry(element, text) {
-    element.focus();
-    element.textContent = text;
-    // Dispatch necessary events to ensure Instagram's React framework recognizes the input
+    
+    // Dispatch events to notify Instagram's framework of the text update
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-
 (function() {
+    // Check if the listener is already registered to prevent duplication
+    if (window.hasInstagramListener) return;
+    window.hasInstagramListener = true;
+    
     console.log("Instagram Controller injected and listening for messages...");
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
             
-            // Ensure we only process messages explicitly intended for Instagram
+            // 1. Check intended recipient
             if (request.network !== 'Instagram') {
-                return false;
+                return false; 
             }
 
+            console.log(`[Instagram Controller] Received command: ${request.command}`);
+
+            // This function calls sendResponse SYNCHRONOUSLY.
+            const respond = (status, message, reason) => {
+                console.log(`[Instagram Controller] Sending response: ${status} - ${message || reason}`);
+                sendResponse({ status, message, reason });
+            };
+
             try {
-                let element, successMessage;
+                let targetElement;
 
                 switch (request.command) {
                     
-                    case 'follow':
-                        console.log('Executing FOLLOW command.');
-                        // FIX: Use the native JS function to locate the button by its text content.
-                        element = findButtonByText('Follow');
-                        successMessage = 'Profile followed on Instagram.';
-                        break;
-
-                    case 'unfollow':
-                        console.log('Executing UNFOLLOW command.');
-                        // Typically, the "Following" button needs two clicks to confirm unfollow.
-                        element = findButtonByText('Following');
-                        if (element) {
-                             element.click(); // Click 'Following' to open confirmation modal
-                             // The confirmation modal button is often the second button with text 'Unfollow'
-                             // This is complex and often requires a delay, so we'll simplify for now 
-                             // and just focus on finding the 'Unfollow' text in the modal if needed.
-                             // For a single click from the profile, we'll try to find the 'Following' button.
-                             successMessage = "Clicked 'Following'. User may need to confirm unfollow in modal.";
+                    case 'like':
+                    case 'unlike':
+                        // Instagram uses an aria-label on the button that contains the heart icon.
+                        // We target the button with the label 'Like' or 'Unlike' (they are mutually exclusive on a single button at a time)
+                        targetElement = document.querySelector('button[aria-label="Like"], button[aria-label="Unlike"]');
+                        
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `${request.command} action executed on Instagram.`);
                         } else {
-                            throw new Error("Could not find 'Following' button to initiate unfollow.");
+                            throw new Error(`Like/Unlike button not found. Ensure the post is visible and loaded.`);
                         }
                         break;
-                    
-                    case 'like':
-                        console.log('Executing LIKE command.');
-                        // Like button is usually an SVG icon with the aria-label "Like" or "Double tap to like"
-                        element = document.querySelector('svg[aria-label="Like"], svg[aria-label="Double tap to like"]');
-                        // We must click the ancestor button, not the SVG itself
-                        element = element ? element.closest('button, div[role="button"]') : null;
-                        successMessage = 'Post liked on Instagram.';
+                        
+                    case 'follow':
+                    case 'unfollow':
+                        // Look for the Follow/Following/Unfollow buttons based on text content, common on profile pages and within posts
+                        targetElement = Array.from(document.querySelectorAll('button'))
+                            .find(el => {
+                                const text = el.textContent?.toLowerCase().trim();
+                                if (!text) return false;
+                                return text === 'follow' || text === 'following' || text === 'unfollow';
+                            });
+
+                        if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", `Profile action (${request.command}) executed on Instagram.`);
+                        } else {
+                            throw new Error("Follow/Unfollow button not found. You must be on a user's profile page or the button must be visible.");
+                        }
                         break;
-                    
-                    case 'unlike':
-                        console.log('Executing UNLIKE command.');
-                        // Unlike button is the filled-in heart icon
-                        element = document.querySelector('svg[aria-label="Unlike"]');
-                        element = element ? element.closest('button, div[role="button"]') : null;
-                        successMessage = 'Post unliked on Instagram.';
-                        break;
+
 
                     case 'comment':
                         console.log(`Executing COMMENT command with text: ${request.text}`);
-                        // 1. Find the comment input area. Often by aria-label or specific container.
-                        const commentInput = document.querySelector('textarea[aria-label="Add a comment..."], input[aria-label="Add a comment..."]');
                         
-                        if (!commentInput) {
-                            throw new Error("Comment input field not found.");
+                        if (!request.text) {
+                             throw new Error("Cannot send comment: Text is missing.");
                         }
 
-                        // 2. Insert the text
-                        simulateTextEntry(commentInput, request.text);
-
-                        // 3. Find and click the Post button (which usually appears after text is entered)
-                        // It's often the button with the text 'Post'
-                        setTimeout(() => {
-                            const postButton = findButtonByText('Post');
-                            if (postButton) {
-                                postButton.click();
-                                sendResponse({ status: "SUCCESS", message: "Comment posted on Instagram." });
-                            } else {
-                                sendResponse({ status: "ERROR", reason: "Post button not found or disabled." });
-                            }
-                        }, 500); // Small delay to allow the 'Post' button to activate
+                        // 1. Find the comment input field (usually a textarea)
+                        let commentInput = document.querySelector('textarea[aria-label="Add a comment..."]');
                         
-                        return true; // Return true for async response (due to setTimeout)
+                        if (!commentInput) {
+                            // Fallback for different languages or UI variations
+                             commentInput = Array.from(document.querySelectorAll('textarea'))
+                                .find(el => el.getAttribute('placeholder')?.includes('comment'));
+                            if (!commentInput) {
+                                throw new Error("Comment input field not found. Ensure the post is visible and the comment section is loaded.");
+                            }
+                        }
+
+                        // 2. Set the text and dispatch events
+                        setCommentBoxText(commentInput, request.text);
+                        
+                        // 3. Find the submit button
+                        // The Post button is often disabled until text is entered, so we look for the button with the text 'Post'
+                        const submitButton = Array.from(document.querySelectorAll('button'))
+                            .find(el => el.textContent?.trim() === 'Post');
+                        
+                        if (submitButton) {
+                            submitButton.click();
+                            respond("SUCCESS", "Comment posted on Instagram.");
+                        } else {
+                            throw new Error("Post button not found or is disabled. Ensure text has been added to the field.");
+                        }
+                        break;
+                        
+                    case 'story':
+                         // Story interaction is highly contextual and difficult to generalize reliably on the web.
+                         // We will attempt to click the "Next" button if a story is open.
+                         targetElement = document.querySelector('div[role="button"][aria-label="Next"]');
+                         if (targetElement) {
+                            targetElement.click();
+                            respond("SUCCESS", "Advanced to the next story on Instagram.");
+                         } else {
+                            respond("ERROR", null, `Command 'story' failed. Next button not found. You need to manually open a story first.`);
+                         }
+                         break;
 
                     default:
-                        sendResponse({ status: "ERROR", reason: `Unknown command: ${request.command}` });
-                        return true;
-                }
-
-                // Handler for simple click actions (like, follow, etc.)
-                if (element && element.click) {
-                    element.click();
-                    sendResponse({ status: "SUCCESS", message: successMessage });
-                } else if (request.command !== 'comment') {
-                    // Only throw error if it wasn't a 'comment' command (which handles its own response)
-                    throw new Error(`Target element for ${request.command} not found. Check if the element is visible on the page.`);
+                        respond("ERROR", null, `Unknown command: ${request.command}`);
+                        break;
                 }
 
             } catch (error) {
-                // Catches errors from any synchronous step
-                sendResponse({ status: "ERROR", reason: `Execution failed on Instagram: ${error.message}` });
+                // If any error occurs in the try block, catch it and send an ERROR response.
+                respond("ERROR", null, `Execution failed on Instagram: ${error.message}`);
             }
 
-            // Must return true for all message handlers
-            return true;
+            // Signal synchronous response
         }
     );
 })();
